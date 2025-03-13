@@ -14,6 +14,7 @@ import (
 const (
 	ModeDebug = "debug"
 	ModeRelease = "release"
+	SocketUri = ""
 )
 
 type EnvConfig struct {
@@ -21,7 +22,6 @@ type EnvConfig struct {
 	FileUploadLimit int
 	Mode string
 	HostUrl string
-	DbUrl string
 }
 
 var Config EnvConfig
@@ -44,7 +44,6 @@ func init() {
 	Config = EnvConfig{
 		Port: EnvGetString("PORT", true),
 		FileUploadLimit: EnvGetNumber("FILE_UPLOAD_LIMIT_MB", true),
-		DbUrl: EnvGetString("DB_URL", true),
 
 		Mode: EnvGetString("MODE", false),
 	}

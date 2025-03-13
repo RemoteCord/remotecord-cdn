@@ -14,6 +14,9 @@ func pingEndpoint(c *gin.Context) {
 
 func InitRoutes() {
 
+
+
+
 	// Configure primary router
 	router := gin.Default()
 	router.MaxMultipartMemory = int64(Config.FileUploadLimit) << 20
@@ -27,9 +30,10 @@ func InitRoutes() {
 	api.Group("/cdn")
 	{
 		api.POST("/upload", uploadEndpoint)
+		api.GET("/download/:clientid", getFileEndpoint)
 	}
 
-	router.Static("/download", "./uploads/images")
+	// router.Static("/download", "./uploads/images")
 
 	// Run router
 	router.Run(":" + Config.Port)

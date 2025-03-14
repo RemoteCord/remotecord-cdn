@@ -11,9 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -98,7 +96,6 @@ func getUploadEndpoint(c *gin.Context) {
 	})
 }
 
-
 func uploadEndpoint(c *gin.Context) {
 	const paramName = "file"
 	const folder = "./uploads/images/"
@@ -125,15 +122,9 @@ func uploadEndpoint(c *gin.Context) {
 		return
 	}
 
-	fileHeader, err := c.FormFile(paramName)
+	file, header, err := c.Request.FormFile(paramName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file upload: " + err.Error()})
-		return
-	}
-
-	file, err := fileHeader.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file: " + err.Error()})
 		return
 	}
 	defer file.Close()
@@ -145,7 +136,7 @@ func uploadEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Define the full path for the uploaded file
+	// Define file path and create destination file
 	filePath := filepath.Join(folder, realFileName)
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -154,38 +145,31 @@ func uploadEndpoint(c *gin.Context) {
 	}
 	defer dst.Close()
 
-	// Reset file pointer after initial read
-	file.Seek(0, 0)
-
-	// Efficiently copy file to disk
-	written, err := io.Copy(dst, file)
+	// Use an optimized buffer for writing
+	buffer := make([]byte, 32*1024) // 32 KB buffer to optimize RAM usage
+	written, err := io.CopyBuffer(dst, file, buffer)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error copying file: " + err.Error()})
 		return
 	}
 
-	// Force garbage collection after processing large files
-	runtime.GC()
-
-	// Store file metadata
+	// Store metadata efficiently
 	if FileUploads.Files == nil {
 		FileUploads.Files = make(map[string][]string)
 	}
-	metadataSplit := strings.Split(fileHeader.Filename, ".")
-	extFile := metadataSplit[len(metadataSplit)-1]
+	ext := filepath.Ext(header.Filename)
+	metadata := []string{strconv.FormatInt(written, 10), ext}
 
-	metadata := []string{strconv.FormatInt(written, 10), extFile}
-	data := append([]string{realFileName, user.ClientID}, metadata...)
-
-	FileUploads.Files[uploadToken] = data
+	FileUploads.Files[uploadToken] = append([]string{realFileName, user.ClientID}, metadata...)
 
 	dnsCdn := util.EnvGetString("DNS_CDN", true)
 	fileUrl := fmt.Sprintf("%s/api/download/%s?token=%s", dnsCdn, user.ClientID, uploadToken)
 
-	FetchFileCallback(c, user.ClientID, fileUrl, fileHeader.Filename, written, extFile)
+	FetchFileCallback(c, user.ClientID, fileUrl, header.Filename, written, ext)
 
 	c.JSON(http.StatusOK, gin.H{"file_url": fileUrl})
 }
+
 
 
 func getFileEndpoint(c *gin.Context) {

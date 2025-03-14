@@ -6,10 +6,12 @@ import (
 
 	"cdn/api/util"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -99,9 +101,9 @@ func getUploadEndpoint(c *gin.Context) {
 
 func uploadEndpoint(c *gin.Context) {
 	const paramName = "file"
+	const folder = "./uploads/images/"
 
 	tokenHeader := c.Request.Header.Get("Authorization")
-
 	uploadToken := c.Param("uploadtoken")
 
 	if uploadToken == "" {
@@ -110,9 +112,6 @@ func uploadEndpoint(c *gin.Context) {
 	}
 
 	realFileName := c.PostForm("fileName")
-	// tokenFile := c.PostForm("tokenFile")
-
-	fmt.Println(realFileName, uploadToken)
 
 	if tokenHeader == "" || len(tokenHeader) < 7 || tokenHeader[:7] != "Bearer " {
 		c.String(http.StatusUnauthorized, "Invalid or missing Bearer token")
@@ -120,122 +119,74 @@ func uploadEndpoint(c *gin.Context) {
 	}
 
 	tokenHeader = tokenHeader[7:] // Remove "Bearer " prefix
-
-	fmt.Println(tokenHeader, uploadToken)
-
 	user := FetchTokenInfo(c, tokenHeader)
 	if user == nil {
 		c.String(http.StatusUnauthorized, "Invalid token")
 		return
 	}
 
-
 	fileHeader, err := c.FormFile(paramName)
 	if err != nil {
-		c.String(http.StatusBadRequest, "Invalid file upload: %s", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file upload: " + err.Error()})
 		return
 	}
 
-	fmt.Println(fileHeader.Filename, fileHeader.Size)
-
 	file, err := fileHeader.Open()
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to open uploaded file: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file: " + err.Error()})
 		return
 	}
 	defer file.Close()
 
-	// Validate file type based on file content
-	fileBuffer := make([]byte, 512) // Read first 512 bytes of file content
-	_, err = file.Read(fileBuffer)
+	// Ensure the uploads directory exists
+	err = os.MkdirAll(folder, 0755)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to read file: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create upload directory"})
 		return
 	}
-	// fileType := http.DetectContentType(fileBuffer)
 
-	// // Check if file type is allowed (image MIME types whitelist)
-	// allowedMIMETypes := map[string]bool{
-	// 	"image/jpg":  true,
-	// 	"image/jpeg": true,
-	// 	"image/png":  true,
-	// 	"image/gif":  true,
-	// }
-	// if !allowedMIMETypes[fileType] {
-	// 	c.String(http.StatusBadRequest, "Invalid file upload: file type must be an image. Found '%s'.", fileType)
-	// 	return
-	// }
+	// Define the full path for the uploaded file
+	filePath := filepath.Join(folder, realFileName)
+	dst, err := os.Create(filePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file: " + err.Error()})
+		return
+	}
+	defer dst.Close()
 
-	// Upload the file if has not already been uploaded
-	// fileHashBuffer := md5.Sum(fileBuffer)
-		//err = c.SaveUploadedFile(fileHeader, "./uploads/images/"+fileName)
+	// Reset file pointer after initial read
+	file.Seek(0, 0)
 
-	// if !alreadyExists {
-		// Create the destination file
-		dst, err := os.Create("./uploads/images/" + realFileName)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Failed to save uploaded file: %s", err.Error())
-			return
-		}
-		defer dst.Close()
+	// Efficiently copy file to disk
+	written, err := io.Copy(dst, file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error copying file: " + err.Error()})
+		return
+	}
 
-		// Reset the file pointer to beginning after earlier read
-		file.Seek(0, 0)
+	// Force garbage collection after processing large files
+	runtime.GC()
 
-		// Create a buffer for copying
-		buf := make([]byte, 32*1024)
-		var written int64
-
-		// Copy the file in chunks and report progress
-		for {
-			n, err := file.Read(buf)
-			if n > 0 {
-				nw, err := dst.Write(buf[:n])
-				if err != nil {
-					return
-				}
-				written += int64(nw)
-				progress := float64(written) / float64(fileHeader.Size) * 100
-				fmt.Printf("\rUploading... %.2f%%", progress)
-			}
-			if err != nil {
-				break
-			}
-		}
-		fmt.Println("\nUpload complete!")
-
-		
-	// }
-
+	// Store file metadata
 	if FileUploads.Files == nil {
 		FileUploads.Files = make(map[string][]string)
 	}
 	metadataSplit := strings.Split(fileHeader.Filename, ".")
-
 	extFile := metadataSplit[len(metadataSplit)-1]
 
-	metadata := []string{strconv.FormatInt(fileHeader.Size, 10), extFile}
-
+	metadata := []string{strconv.FormatInt(written, 10), extFile}
 	data := append([]string{realFileName, user.ClientID}, metadata...)
 
-	fmt.Print(data, metadata)
-
-	FileUploads.Files[uploadToken] =  data
+	FileUploads.Files[uploadToken] = data
 
 	dnsCdn := util.EnvGetString("DNS_CDN", true)
+	fileUrl := fmt.Sprintf("%s/api/download/%s?token=%s", dnsCdn, user.ClientID, uploadToken)
 
-	fileUrl := dnsCdn + `/api/download/` + user.ClientID + `?token=` + uploadToken
+	FetchFileCallback(c, user.ClientID, fileUrl, fileHeader.Filename, written, extFile)
 
-	fmt.Println(fileUrl)
-	
-	FetchFileCallback(c, user.ClientID, fileUrl, fileHeader.Filename, fileHeader.Size, extFile)
-
-
-	body := gin.H{
-		"file_url": fileUrl,
-	}
-	c.JSON(http.StatusOK, body)
+	c.JSON(http.StatusOK, gin.H{"file_url": fileUrl})
 }
+
 
 func getFileEndpoint(c *gin.Context) {
 	clientid := c.Param("clientid")

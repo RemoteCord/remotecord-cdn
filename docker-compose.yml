@@ -1,9 +1,17 @@
+version: "3.9"
+
 services:
   go-cdn:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGETOS: linux
+        TARGETARCH: amd64  # Change to arm64 if using an ARM-based system
     ports:
       - "3002:3002"
-    env_file:
-      - .env
+    environment:
+      - ENV=production  # Example of setting an environment variable
     volumes:
-      - ./uploads/images:/root/uploads/images
+      - ./data:/app/data  # Optional: Mount a volume if needed
+    restart: unless-stopped

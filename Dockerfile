@@ -1,4 +1,4 @@
-# Use the official Golang image as the base image
+# Use the official Golang image as the base image for building
 FROM golang:1.22.2 AS builder
 
 # Set the Current Working Directory inside the container
@@ -7,35 +7,40 @@ WORKDIR /app
 # Copy go.mod and go.sum files
 COPY go.mod go.sum ./
 
-# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+# Download dependencies (cached if go.mod/go.sum don't change)
 RUN go mod download
 
 # Copy the source code into the container
 COPY . .
 
-# Build the Go app
-RUN go build -o go-cdn .
+# Ensure the binary is built for Linux (amd64 or arm64 based on your setup)
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o go-cdn .
 
-# Start a new stage from scratch
+# Use a minimal base image for production
 FROM alpine:latest
 
-# Set the Current Working Directory inside the container
+# Install libc6-compat to support Go binaries
+RUN apk add --no-cache libc6-compat
+
+# Set the Working Directory inside the container
 WORKDIR /root/
 
-# Copy the Pre-built binary file from the previous stage
+# Copy the pre-built binary from the builder stage
 COPY --from=builder /app/go-cdn .
 
 # Copy the .env file (if needed)
 COPY .env ./
 
-# Ensure the executable has the correct permissions
+# Ensure the binary has execute permissions
 RUN chmod +x go-cdn
 
 # Verify the presence of the binary
 RUN ls -la /root
 
-# Expose port 3002 to the outside world
+# Expose the port your app runs on
 EXPOSE 3002
 
-# Command to run the executable
+# Run the application
 CMD ["./go-cdn"]

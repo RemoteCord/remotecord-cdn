@@ -14,7 +14,8 @@ import (
 const (
 	ModeDebug = "debug"
 	ModeRelease = "release"
-	SocketUri = ""
+	DnsCdn = ""
+	ApiUrl = ""
 )
 
 type EnvConfig struct {
@@ -22,6 +23,8 @@ type EnvConfig struct {
 	FileUploadLimit int
 	Mode string
 	HostUrl string
+	ApiUrl string
+	DnsCdn string
 }
 
 var Config EnvConfig

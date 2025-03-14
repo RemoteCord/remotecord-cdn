@@ -29,8 +29,9 @@ func InitRoutes() {
 
 	api.Group("/cdn")
 	{
-		api.POST("/upload", uploadEndpoint)
+		api.POST("/upload/:uploadtoken", uploadEndpoint)
 		api.GET("/download/:clientid", getFileEndpoint)
+		api.GET("/upload-endpoint", getUploadEndpoint)
 	}
 
 	// router.Static("/download", "./uploads/images")

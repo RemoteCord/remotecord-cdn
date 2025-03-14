@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,8 +97,15 @@ func getUploadEndpoint(c *gin.Context) {
 	})
 }
 
+
+// Buffer pool to minimize memory allocation
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 32*1024) // 32 KB buffer
+	},
+}
+
 func uploadEndpoint(c *gin.Context) {
-	const paramName = "file"
 	const folder = "./uploads/images/"
 
 	tokenHeader := c.Request.Header.Get("Authorization")
@@ -122,21 +130,14 @@ func uploadEndpoint(c *gin.Context) {
 		return
 	}
 
-	file, header, err := c.Request.FormFile(paramName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file upload: " + err.Error()})
-		return
-	}
-	defer file.Close()
-
 	// Ensure the uploads directory exists
-	err = os.MkdirAll(folder, 0755)
+	err := os.MkdirAll(folder, 0755)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create upload directory"})
 		return
 	}
 
-	// Define file path and create destination file
+	// Define file path
 	filePath := filepath.Join(folder, realFileName)
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -145,19 +146,22 @@ func uploadEndpoint(c *gin.Context) {
 	}
 	defer dst.Close()
 
-	// Use an optimized buffer for writing
-	buffer := make([]byte, 32*1024) // 32 KB buffer to optimize RAM usage
-	written, err := io.CopyBuffer(dst, file, buffer)
+	// Get a buffer from the pool
+	buf := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buf)
+
+	// Stream the file directly from the request body to disk
+	written, err := io.CopyBuffer(dst, c.Request.Body, buf)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error copying file: " + err.Error()})
 		return
 	}
 
-	// Store metadata efficiently
+	// Store file metadata
 	if FileUploads.Files == nil {
 		FileUploads.Files = make(map[string][]string)
 	}
-	ext := filepath.Ext(header.Filename)
+	ext := filepath.Ext(realFileName)
 	metadata := []string{strconv.FormatInt(written, 10), ext}
 
 	FileUploads.Files[uploadToken] = append([]string{realFileName, user.ClientID}, metadata...)
@@ -165,7 +169,7 @@ func uploadEndpoint(c *gin.Context) {
 	dnsCdn := util.EnvGetString("DNS_CDN", true)
 	fileUrl := fmt.Sprintf("%s/api/download/%s?token=%s", dnsCdn, user.ClientID, uploadToken)
 
-	FetchFileCallback(c, user.ClientID, fileUrl, header.Filename, written, ext)
+	FetchFileCallback(c, user.ClientID, fileUrl, realFileName, written, ext)
 
 	c.JSON(http.StatusOK, gin.H{"file_url": fileUrl})
 }

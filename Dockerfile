@@ -31,6 +31,9 @@ COPY .env ./
 # Ensure the executable has the correct permissions
 RUN chmod +x go-cdn
 
+# Verify the presence of the binary
+RUN ls -la /root
+
 # Expose port 3002 to the outside world
 EXPOSE 3002
 

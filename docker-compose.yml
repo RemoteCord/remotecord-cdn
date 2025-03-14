@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  go-cdn:
+    build: .
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads/images:/root/uploads/images

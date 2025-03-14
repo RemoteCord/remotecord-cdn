@@ -89,10 +89,10 @@ func getUploadEndpoint(c *gin.Context) {
 
 	fmt.Println(randomHex, UploadEndpoints.Uploads)
 
-	
+	dnsCdn := util.EnvGetString("DNS_CDN", true)
 
 	c.JSON(http.StatusOK, gin.H{
-		"upload_url": `http://localhost:3002/api/upload/`+randomHex,
+		"upload_url": dnsCdn + `/api/upload/`+randomHex,
 	})
 }
 

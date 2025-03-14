@@ -271,7 +271,7 @@ func getFileEndpoint(c *gin.Context) {
 
 
 	c.Header("Content-Disposition", "attachment; filename="+fileName)
-	c.File("./uploads/images/" + fileName)
+	c.File("uploads/images/" + fileName)
 		// c.JSON(http.StatusOK, gin.H{
 		// 	"status": "ok",
 		// })

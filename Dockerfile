@@ -28,6 +28,9 @@ COPY --from=builder /app/go-cdn .
 # Copy the .env file (if needed)
 COPY .env ./
 
+# Ensure the executable has the correct permissions
+RUN chmod +x go-cdn
+
 # Expose port 3002 to the outside world
 EXPOSE 3002
 

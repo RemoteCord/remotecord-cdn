@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -235,6 +236,9 @@ func uploadEndpoint(c *gin.Context) {
 		"file_url": fileUrl,
 	}
 	c.JSON(http.StatusOK, body)
+
+	debug.FreeOSMemory()
+	
 }
 
 func getFileEndpoint(c *gin.Context) {
@@ -275,5 +279,7 @@ func getFileEndpoint(c *gin.Context) {
 		// c.JSON(http.StatusOK, gin.H{
 		// 	"status": "ok",
 		// })
+
+		
 
 }

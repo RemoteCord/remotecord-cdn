@@ -19,7 +19,7 @@ func InitRoutes() {
 
 	// Configure primary router
 	router := gin.Default()
-	router.MaxMultipartMemory = int64(Config.FileUploadLimit) << 20
+	//router.MaxMultipartMemory = int64(Config.FileUploadLimit) << 20
 
 	// Setup routes & paths
 	api := router.Group("/api")

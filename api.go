@@ -17,7 +17,14 @@ func main() {
     fmt.Println("Starting cron job")
 
     // Schedule the cron job (runs every minute)
+    // Run cleanup every second
     c.AddFunc("@every 1s", router.ListAllFilesFromFolder)
+
+    // Add a channel to keep the program running
+    stop := make(chan struct{})
+    go func() {
+        <-stop // This will block forever
+    }()
     
     // Add memory cleanup job
     c.AddFunc("@every 5m", func() {

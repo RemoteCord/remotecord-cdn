@@ -17,7 +17,7 @@ func main() {
     fmt.Println("Starting cron job")
 
     // Schedule the cron job (runs every minute)
-    // c.AddFunc("@every 1m", router.CleanAllFilesFromFolder)
+    c.AddFunc("@every 1s", router.ListAllFilesFromFolder)
     
     // Add memory cleanup job
     c.AddFunc("@every 5m", func() {

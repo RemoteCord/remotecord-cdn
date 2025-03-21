@@ -9,10 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,24 +32,57 @@ var UploadEndpoints struct {
 func ListAllFilesFromFolder() {
 
 	fmt.Println("Listing all files from folder")
-	fmt.Println(FileUploads.Files)
+	fmt.Println(FileUploads.Files, UploadEndpoints.Uploads)
+	now := time.Now()
 
-	err := filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
+	for token, data := range FileUploads.Files {
+
+		date, err := time.Parse(time.RFC850, data[4])
 		if err != nil {
-			log.Println("Error:", err)
-			return err
+			log.Printf("Error parsing date: %v", err)
+			continue
 		}
 
-		// Only print files (excluding directories)
-		if !d.IsDir() {
-			fmt.Println(path) // You can print just d.Name() for file names
-		}
-		return nil
-	})
+		diff := int(now.Sub(date).Seconds())
 
-	if err != nil {
-		log.Fatal(err)
+		fmt.Println(token, data, diff)
+
+		if diff > 5 {
+			fmt.Println("Deleting file", data[0])
+			err := os.Remove(folder + "/" + data[0])
+			if err != nil {
+				log.Printf("Error deleting file: %v", err)
+			}
+			delete(FileUploads.Files, token)
+		}
 	}
+
+	// err := filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
+	// 	if err != nil {
+	// 		log.Println("Error:", err)
+	// 		return err
+	// 	}
+
+	// 	// Only print files (excluding directories)
+	// 	if !d.IsDir() {
+	// 		now := time.Now()
+	// 		datestr := path[5:]
+	// 		fmt.Println(path, datestr, d) // You can print just d.Name() for file names
+	// 		date, err := time.Parse(time.RFC850, datestr)
+	// 		if err != nil {
+	// 			log.Printf("Error parsing date: %v", err)
+	// 			return nil
+	// 		}
+
+	// 		difference := now.Sub(date)
+	// 		fmt.Println(difference)
+	// 	}
+	// 	return nil
+	// })
+
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 } 
 
@@ -74,10 +107,10 @@ var AllowedHost = "localhost:3002"
 func getUploadEndpoint(c *gin.Context) {
 	fmt.Println(c.Request.Header, c.Request.Header.Get("Origin"),c.Request.Host+c.Request.URL.Path)
 	
-	if c.Request.Host != AllowedHost {
-		c.String(http.StatusUnauthorized, "Invalid or missing token")
-		return
-	}
+	// if c.Request.Host != AllowedHost {
+	// 	c.String(http.StatusUnauthorized, "Invalid or missing token")
+	// 	return
+	// }
 
 
 	clientid := c.Query("clientid")
@@ -104,14 +137,21 @@ func uploadEndpoint(c *gin.Context) {
 	tokenHeader := c.Request.Header.Get("Authorization")
 
 	uploadToken := c.Param("uploadtoken")
+	verifiedEndpoint := UploadEndpoints.Uploads[uploadToken]
 
-	if uploadToken == "" {
+	fmt.Println(uploadToken, verifiedEndpoint)
+	if uploadToken == "" || verifiedEndpoint == "" {
 		c.String(http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
 	realFileName := c.PostForm("fileName")
 	// tokenFile := c.PostForm("tokenFile")
+
+	if realFileName == "" {
+		c.String(http.StatusUnauthorized, "Invalid or missing file name")
+		return
+	}
 
 	fmt.Println(realFileName, uploadToken)
 
@@ -172,6 +212,16 @@ func uploadEndpoint(c *gin.Context) {
 		//err = c.SaveUploadedFile(fileHeader, "./uploads/images/"+fileName)
 
 	// if !alreadyExists {
+		// Ensure directory exists
+
+
+		fmt.Println("Creating directory", realFileName)
+		err = os.MkdirAll("./uploads/images", 0755)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Failed to create directory: %s", err.Error())
+			return
+		}
+
 		// Create the destination file
 		dst, err := os.Create("./uploads/images/" + realFileName)
 		if err != nil {
@@ -215,7 +265,7 @@ func uploadEndpoint(c *gin.Context) {
 
 	extFile := metadataSplit[len(metadataSplit)-1]
 
-	metadata := []string{strconv.FormatInt(fileHeader.Size, 10), extFile}
+	metadata := []string{strconv.FormatInt(fileHeader.Size, 10), extFile, time.Now().Format(time.RFC850)}
 
 	data := append([]string{realFileName, user.ClientID}, metadata...)
 
@@ -229,6 +279,8 @@ func uploadEndpoint(c *gin.Context) {
 
 	fmt.Println(fileUrl)
 	
+
+	// Send upload to bot
 	FetchFileCallback(c, user.ClientID, fileUrl, fileHeader.Filename, fileHeader.Size, extFile)
 
 

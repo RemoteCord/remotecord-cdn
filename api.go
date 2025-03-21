@@ -18,7 +18,10 @@ func main() {
 
     // Schedule the cron job (runs every minute)
     // Run cleanup every second
-    c.AddFunc("@every 1s", router.ListAllFilesFromFolder)
+    c.AddFunc("@every 1s", func() {
+        fmt.Println("Running files listing check...")
+        router.ListAllFilesFromFolder()
+    })
 
     // Add a channel to keep the program running
     stop := make(chan struct{})

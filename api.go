@@ -40,4 +40,7 @@ func main() {
     
     // Start the router
     router.InitRoutes()
+
+    select {}
+
 }

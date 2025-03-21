@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 )
 
 func main() {
@@ -18,16 +18,15 @@ func main() {
 
     // Schedule the cron job (runs every minute)
     // Run cleanup every second
-    c.AddFunc("@every 1s", func() {
+    _, err := c.AddFunc("@every 1s", func() {
         fmt.Println("Running files listing check...")
         router.ListAllFilesFromFolder()
     })
 
-    // Add a channel to keep the program running
-    stop := make(chan struct{})
-    go func() {
-        <-stop // This will block forever
-    }()
+    if err != nil {
+		fmt.Println("Error adding cron job:", err)
+		return
+	}
     
     // Add memory cleanup job
     c.AddFunc("@every 5m", func() {

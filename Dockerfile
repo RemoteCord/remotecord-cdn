@@ -16,7 +16,7 @@ COPY . .
 # Ensure the binary is built for Linux (amd64 or arm64 based on your setup)
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go mod tify && go build -o go-cdn .
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go mod tidy && go build -o go-cdn .
 
 # Use a minimal base image for production
 FROM alpine:latest

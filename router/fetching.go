@@ -136,6 +136,61 @@ func FetchFileCallback(c *gin.Context, clientid string, fileurl string, filename
 	
 }
 
+
+func FetchLargeFileCallback(c *gin.Context, controllerid string, fileurl string, filename string, filesize int64, fileformat string ) {
+	metadata := map[string]interface{}{
+		"filename": filename,
+		"size":    filesize,
+		"format":  fileformat,
+	}
+
+	uploadCallback := map[string]interface{}{
+		"fileurl":  fileurl,
+		"controllerid": controllerid,
+		"metadata": metadata,
+	}
+
+	payload, err := json.Marshal(uploadCallback)
+	if err != nil {
+		log.Fatal("Error marshaling JSON:", err)
+	}
+
+	fmt.Println(string(payload))
+
+	apiUrl := util.EnvGetString("API_URL", true)
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiUrl + `/api/cdn/upload-large`, bytes.NewBuffer(payload))
+	if err != nil {
+		log.Fatal("Error creating request:", err)
+	}
+
+	// Set headers (adjust as needed)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Perform request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		// log.Fatal("Error sending request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Print the response body for debugging
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Fatal("Error reading response:", err)
+	}
+
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		log.Fatal("Error marshaling JSON:", err)
+	}
+	fmt.Println("Response JSON:", string(jsonBytes))
+	
+}
+
 func FetchTokenFile(c *gin.Context, tokenFile string, clientid string) *struct {
 	Status bool `json:"status"`
 } {

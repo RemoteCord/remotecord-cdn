@@ -37,7 +37,8 @@ func ListAllFilesFromFolder() {
 
 	for token, data := range FileUploads.Files {
 
-		date, err := time.Parse(time.RFC850, data[4])
+		dateStr := data[len(data)-1]
+		date, err := time.Parse(time.RFC850, dateStr)
 		if err != nil {
 			log.Printf("Error parsing date: %v", err)
 			continue
@@ -47,13 +48,14 @@ func ListAllFilesFromFolder() {
 
 		fmt.Println(token, data, diff)
 
-		if diff > 5 {
+		if diff > 120 {
 			fmt.Println("Deleting file", data[0])
 			err := os.Remove(folder + "/" + data[0])
 			if err != nil {
 				log.Printf("Error deleting file: %v", err)
 			}
 			delete(FileUploads.Files, token)
+			delete(UploadEndpoints.Uploads, token)
 		}
 	}
 
@@ -131,6 +133,157 @@ func getUploadEndpoint(c *gin.Context) {
 	})
 }
 
+
+func uploadLargeEndpoint(c *gin.Context) {
+	const paramName = "file"
+
+
+	uploadToken := c.Param("uploadtoken")
+	verifiedEndpoint := UploadEndpoints.Uploads[uploadToken]
+
+	fmt.Println(uploadToken, verifiedEndpoint)
+	if uploadToken == "" || verifiedEndpoint == "" {
+		c.String(http.StatusUnauthorized, "Invalid or missing token")
+		return
+	}
+
+	realFileName := c.PostForm("fileName")
+	// tokenFile := c.PostForm("tokenFile")
+
+	if realFileName == "" {
+		c.String(http.StatusUnauthorized, "Invalid or missing file name")
+		return
+	}
+
+	fmt.Println(realFileName, uploadToken)
+
+	fmt.Println(uploadToken)
+
+
+
+	fileHeader, err := c.FormFile(paramName)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid file upload: %s", err.Error())
+		return
+	}
+
+	fmt.Println(fileHeader.Filename, fileHeader.Size)
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to open uploaded file: %s", err.Error())
+		return
+	}
+	defer file.Close()
+
+	// Validate file type based on file content
+	fileBuffer := make([]byte, 512) // Read first 512 bytes of file content
+	_, err = file.Read(fileBuffer)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to read file: %s", err.Error())
+		return
+	}
+	// fileType := http.DetectContentType(fileBuffer)
+
+	// // Check if file type is allowed (image MIME types whitelist)
+	// allowedMIMETypes := map[string]bool{
+	// 	"image/jpg":  true,
+	// 	"image/jpeg": true,
+	// 	"image/png":  true,
+	// 	"image/gif":  true,
+	// }
+	// if !allowedMIMETypes[fileType] {
+	// 	c.String(http.StatusBadRequest, "Invalid file upload: file type must be an image. Found '%s'.", fileType)
+	// 	return
+	// }
+
+	// Upload the file if has not already been uploaded
+	// fileHashBuffer := md5.Sum(fileBuffer)
+		//err = c.SaveUploadedFile(fileHeader, "./uploads/images/"+fileName)
+
+	// if !alreadyExists {
+		// Ensure directory exists
+
+
+		fmt.Println("Creating directory", realFileName)
+		err = os.MkdirAll("./uploads/images", 0755)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Failed to create directory: %s", err.Error())
+			return
+		}
+
+		// Create the destination file
+		dst, err := os.Create("./uploads/images/" + realFileName)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Failed to save uploaded file: %s", err.Error())
+			return
+		}
+		defer dst.Close()
+
+		// Reset the file pointer to beginning after earlier read
+		file.Seek(0, 0)
+
+		// Create a buffer for copying
+		buf := make([]byte, 32*1024)
+		var written int64
+
+		// Copy the file in chunks and report progress
+		for {
+			n, err := file.Read(buf)
+			if n > 0 {
+				nw, err := dst.Write(buf[:n])
+				if err != nil {
+					return
+				}
+				written += int64(nw)
+				progress := float64(written) / float64(fileHeader.Size) * 100
+				fmt.Printf("\rUploading... %.2f%%", progress)
+			}
+			if err != nil {
+				break
+			}
+		}
+		fmt.Println("\nUpload complete!")
+
+		
+	// }
+
+	if FileUploads.Files == nil {
+		FileUploads.Files = make(map[string][]string)
+	}
+	metadataSplit := strings.Split(fileHeader.Filename, ".")
+
+	extFile := metadataSplit[len(metadataSplit)-1]
+
+	metadata := []string{strconv.FormatInt(fileHeader.Size, 10), extFile, time.Now().Format(time.RFC850)}
+
+	data := append([]string{realFileName}, metadata...)
+
+	fmt.Print(data, metadata)
+
+	FileUploads.Files[uploadToken] =  data
+
+	dnsCdn := util.EnvGetString("DNS_CDN", true)
+	controllerId := UploadEndpoints.Uploads[uploadToken]
+
+	fileUrl := dnsCdn + `/api/download-large/` + controllerId + `?token=` + uploadToken
+
+	fmt.Println(fileUrl)
+	
+
+
+	// Send upload to bot
+	FetchLargeFileCallback(c, controllerId, fileUrl, fileHeader.Filename, fileHeader.Size, extFile)
+
+
+	body := gin.H{
+		"file_url": fileUrl,
+	}
+	c.JSON(http.StatusOK, body)
+
+	debug.FreeOSMemory()
+	
+}
 
 func uploadEndpoint(c *gin.Context) {
 	const paramName = "file"
@@ -320,6 +473,50 @@ func getFileEndpoint(c *gin.Context) {
 		c.String(http.StatusNotFound, "File not found")
 		return
 	}
+
+	fileName := data[0]
+
+	fmt.Println(fileName)
+
+
+
+	c.Header("Content-Disposition", "attachment; filename="+fileName)
+	c.File("uploads/images/" + fileName)
+		// c.JSON(http.StatusOK, gin.H{
+		// 	"status": "ok",
+		// })
+
+		
+
+}
+
+func getFileLargeEndpoint(c *gin.Context) {
+	controllerid := c.Param("controllerid")
+	token := c.Query("token")
+
+	if token == "" {
+		c.String(http.StatusUnauthorized, "Invalid or missing token")
+		return
+	}
+	
+	fmt.Println(controllerid, token)
+
+	// verifyToken := FetchTokenFile(c, token, clientid)
+
+	// fmt.Println(verifyToken)
+
+	// if verifyToken == nil || !verifyToken.Status {
+	// 	c.String(http.StatusUnauthorized, "Invalid token")
+	// 	return
+	// }
+
+
+	data, exists := FileUploads.Files[token]
+	fmt.Println(data, exists)
+	// if !exists || data[1] != controllerid {
+	// 	c.String(http.StatusNotFound, "File not found")
+	// 	return
+	// }
 
 	fileName := data[0]
 

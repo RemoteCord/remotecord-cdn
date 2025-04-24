@@ -127,6 +127,7 @@ func getUploadEndpoint(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"upload_url": dnsCdn + `/api/upload/`+randomHex,
+		"code": randomHex,
 	})
 }
 

@@ -127,7 +127,6 @@ func getUploadEndpoint(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"upload_url": dnsCdn + `/api/upload/`+randomHex,
-		"code": randomHex,
 	})
 }
 
@@ -156,12 +155,12 @@ func uploadEndpoint(c *gin.Context) {
 
 	fmt.Println(realFileName, uploadToken)
 
-	if tokenHeader == "" || len(tokenHeader) < 7 || tokenHeader[:7] != "Bearer " {
+	if tokenHeader == "" || len(tokenHeader) < 7 {
 		c.String(http.StatusUnauthorized, "Invalid or missing Bearer token")
 		return
 	}
 
-	tokenHeader = tokenHeader[7:] // Remove "Bearer " prefix
+
 
 	fmt.Println(tokenHeader, uploadToken)
 

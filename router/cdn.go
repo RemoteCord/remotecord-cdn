@@ -266,7 +266,7 @@ func uploadLargeEndpoint(c *gin.Context) {
 	dnsCdn := util.EnvGetString("DNS_CDN", true)
 	controllerId := UploadEndpoints.Uploads[uploadToken]
 
-	fileUrl := dnsCdn + `/api/download-large/` + controllerId + `?token=` + uploadToken
+	fileUrl := dnsCdn + `/api/download-large/` + controllerId + `?token=` + uploadToken + `&file=` + realFileName
 
 	fmt.Println(fileUrl)
 	
@@ -429,8 +429,7 @@ func uploadEndpoint(c *gin.Context) {
 
 	dnsCdn := util.EnvGetString("DNS_CDN", true)
 
-	fileUrl := dnsCdn + `/api/download/` + user.ClientID + `?token=` + uploadToken
-
+	fileUrl := dnsCdn + `/api/download/` + user.ClientID + `?token=` + uploadToken + `&file=` + realFileName
 	fmt.Println(fileUrl)
 	
 
@@ -481,6 +480,8 @@ func getFileEndpoint(c *gin.Context) {
 
 
 	c.Header("Content-Disposition", "attachment; filename="+fileName)
+	c.Header("Content-Type", "application/octet-stream")
+
 	c.File("uploads/images/" + fileName)
 		// c.JSON(http.StatusOK, gin.H{
 		// 	"status": "ok",
@@ -493,6 +494,7 @@ func getFileEndpoint(c *gin.Context) {
 func getFileLargeEndpoint(c *gin.Context) {
 	controllerid := c.Param("controllerid")
 	token := c.Query("token")
+	
 
 	if token == "" {
 		c.String(http.StatusUnauthorized, "Invalid or missing token")
@@ -525,6 +527,8 @@ func getFileLargeEndpoint(c *gin.Context) {
 
 
 	c.Header("Content-Disposition", "attachment; filename="+fileName)
+	c.Header("Content-Type", "application/octet-stream")
+
 	c.File("uploads/images/" + fileName)
 		// c.JSON(http.StatusOK, gin.H{
 		// 	"status": "ok",

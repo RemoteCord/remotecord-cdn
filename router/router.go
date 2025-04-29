@@ -50,7 +50,7 @@ func InitRoutes() {
 
 func corsMiddleware() gin.HandlerFunc {
  // Define allowed origins as a comma-separated string
- originsString := "https://preview.luqueee.dev,"
+ originsString := "https://preview.luqueee.dev,https://remotecord.app"
  var allowedOrigins []string
  if originsString != "" {
   // Split the originsString into individual origins and store them in allowedOrigins slice
